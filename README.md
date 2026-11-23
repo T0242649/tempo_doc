@@ -69,7 +69,7 @@ Options:
 
 - `-o, --output`: path for the output SVG.
 - `-p, --page`: PDF page number, starting at `1`.
-- `-t, --threshold`: maximum length in PDF points for removing isolated short strokes. The default is `0.96`; `0` only removes duplicate or zero-length segments.
+- `-t, --threshold`: remove simple stroked paths whose total length is at or below this value in PDF points, even if they connect to other paths. The default is `0`, which keeps short paths and round-cap dots and removes duplicate segments.
 - `-h, --help`: show command-line help.
 
 ## What it simplifies and known limitations
@@ -77,7 +77,7 @@ Options:
 - It extracts and merges only simple paths made of `moveto`/`lineto` operators and painted with the PDF `S` operator.
 - Extracted paths are rendered in black; this stage does not preserve their original colors or dashed-line styles, and does not simplify curves or filled paths.
 - Clipping paths are not applied to extracted segments. Some graphics-state operators (`gs`) are not preserved in the intermediate PDF.
-- Rotated pages may have the wrong orientation.
+- Straight strokes on pages rotated by 90, 180, or 270 degrees are mapped to the rotated output.
 - The input PDF is not modified, and the output cannot overwrite the source PDF.
 
-The script reports input, page, dependency, and conversion errors in the terminal. It also warns when the selected page is rotated.
+The script reports input, page, dependency, and conversion errors in the terminal.

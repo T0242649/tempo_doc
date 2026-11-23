@@ -41,6 +41,65 @@ class DependencyTests(unittest.TestCase):
 
 @unittest.skipUnless(shutil.which("pdftocairo"), "pdftocairo is required")
 class ConversionTests(unittest.TestCase):
+    def test_rotated_pages_and_short_strokes(self):
+        cases = {
+            0: ("M10 180l30 0", "M11 179l0.2 0"),
+            90: ("M20 10l0 30", "M21 11l0 0.2"),
+            180: ("M60 20l30 0", "M88.8 21l0.2 0"),
+            270: ("M180 60l0 30", "M179 88.8l0 0.2"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            for rotation, expected_paths in cases.items():
+                with self.subTest(rotation=rotation):
+                    source = Path(directory) / f"drawing-{rotation}.pdf"
+                    pdf = pikepdf.Pdf.new()
+                    page = pdf.add_blank_page(page_size=(100, 200))
+                    page.obj["/Rotate"] = rotation
+                    page.Contents = pdf.make_stream(
+                        b"10 20 m 40 20 l S 11 21 m 11.2 21 l S"
+                    )
+                    pdf.save(source)
+                    subprocess.run(
+                        [sys.executable, str(SCRIPT), str(source)],
+                        capture_output=True, text=True, check=True,
+                    )
+                    svg = source.with_name(f"drawing-{rotation}_merged.svg").read_text(
+                        encoding="utf-8"
+                    )
+                    for expected in expected_paths:
+                        self.assertIn(expected, svg)
+
+    def test_threshold_removes_short_paths_when_requested(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "drawing.pdf"
+            pdf = pikepdf.Pdf.new()
+            page = pdf.add_blank_page(page_size=(100, 100))
+            page.Contents = pdf.make_stream(b"10 10 m 10.2 10 l S")
+            pdf.save(source)
+            subprocess.run(
+                [sys.executable, str(SCRIPT), str(source), "-t", "0.5"],
+                capture_output=True, text=True, check=True,
+            )
+            svg = source.with_name("drawing_merged.svg").read_text(encoding="utf-8")
+            self.assertNotIn("M10 90l0.2 0", svg)
+
+    def test_round_cap_dots_are_preserved_by_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "drawing.pdf"
+            pdf = pikepdf.Pdf.new()
+            page = pdf.add_blank_page(page_size=(100, 100))
+            page.Contents = pdf.make_stream(
+                b"1 J 10 10 m 10 10 l S 0 J 20 20 m 20 20 l S"
+            )
+            pdf.save(source)
+            subprocess.run(
+                [sys.executable, str(SCRIPT), str(source)],
+                capture_output=True, text=True, check=True,
+            )
+            svg = source.with_name("drawing_merged.svg").read_text(encoding="utf-8")
+            self.assertIn("M10 90l0 0", svg)
+            self.assertNotIn("M20 80l0 0", svg)
+
     def test_selected_page_and_paths_with_spaces(self):
         with tempfile.TemporaryDirectory(prefix="pdf svg test ") as directory:
             source = Path(directory) / "drawing (1).pdf"

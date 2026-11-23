@@ -32,8 +32,8 @@ def multiply_matrices(a: Matrix, b: Matrix) -> Matrix:
 
 
 def format_number(value: float) -> str:
-    """Format a number to one decimal place without trailing zeros or -0."""
-    result = ("%.1f" % value).rstrip("0").rstrip(".")
+    """Format a number to three decimal places without trailing zeros or -0."""
+    result = ("%.3f" % value).rstrip("0").rstrip(".")
     return "0" if result in ("-0", "") else result
 
 
@@ -96,7 +96,7 @@ def remove_collinear_points(points: list[Point]) -> list[Point]:
         a, b, c = result[-1], points[index], points[index + 1]
         cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
         dot = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])
-        if abs(cross) >= 0.05 or dot <= 0:
+        if abs(cross) > 1e-9 or dot <= 0:
             result.append(b)
     result.append(points[-1])
     return result
@@ -128,10 +128,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "-t",
         "--threshold",
         type=float,
-        default=0.96,
+        default=0,
         help=(
-            "remove isolated strokes with total length <= this value in PDF points "
-            "(default: 0.96; 0 only removes duplicates)"
+            "remove simple stroked paths with total length <= this value in PDF points "
+            "(default: 0; short paths are kept)"
         ),
     )
     parser.add_argument("-p", "--page", type=int, default=1, help="page number (default: 1)")
@@ -184,6 +184,7 @@ def convert_pdf(
         )
 
     segments: dict[float, set[tuple[Point, Point]]] = collections.defaultdict(set)
+    dots: dict[float, set[Point]] = collections.defaultdict(set)
     short_count = path_count = 0
 
     try:
@@ -199,22 +200,31 @@ def convert_pdf(
         page = pdf.pages[page_number - 1]
         box = [float(value) for value in page.cropbox]
         x0, y0 = min(box[0], box[2]), min(box[1], box[3])
-        height = abs(box[3] - box[1])
-        if int(page.obj.get("/Rotate", 0)) % 360:
-            print("Warning: rotated pages may be oriented incorrectly.", file=sys.stderr)
+        page_width, page_height = abs(box[2] - box[0]), abs(box[3] - box[1])
+        rotation = int(page.obj.get("/Rotate", 0)) % 360
+        if rotation not in (0, 90, 180, 270):
+            raise RuntimeError(f"Unsupported PDF page rotation: {rotation} degrees.")
 
         instructions = pikepdf.parse_content_stream(page)
         ctm: Matrix = (1, 0, 0, 1, 0, 0)
-        graphics_stack: list[tuple[Matrix, float]] = []
+        graphics_stack: list[tuple[Matrix, float, int]] = []
         line_width = 1.0
+        line_cap = 0
         pending = []
         remaining = []
 
         def to_page(x: float, y: float) -> Point:
-            return (
-                round(ctm[0] * x + ctm[2] * y + ctm[4] - x0, 1),
-                round(height - (ctm[1] * x + ctm[3] * y + ctm[5] - y0), 1),
-            )
+            px = ctm[0] * x + ctm[2] * y + ctm[4] - x0
+            py = ctm[1] * x + ctm[3] * y + ctm[5] - y0
+            if rotation == 90:
+                px, py = py, px
+            elif rotation == 180:
+                px, py = page_width - px, py
+            elif rotation == 270:
+                px, py = page_height - py, page_width - px
+            else:
+                py = page_height - py
+            return round(px, 3), round(py, 3)
 
         def flush_pending() -> None:
             remaining.extend(pending)
@@ -242,11 +252,17 @@ def convert_pdf(
                     math.dist(points[index], points[index + 1])
                     for index in range(len(points) - 1)
                 )
-                if length <= threshold:
-                    short_count += 1
-                    continue
                 scale = math.sqrt(abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]))
                 width = round(max(line_width * scale, 0.1), 2)
+                if length == 0:
+                    if threshold == 0 and line_cap == 1 and len(points) > 1:
+                        dots[width].add(points[0])
+                    else:
+                        short_count += 1
+                    continue
+                if threshold > 0 and length <= threshold:
+                    short_count += 1
+                    continue
                 for a, b in zip(points, points[1:]):
                     if a != b:
                         segments[width].add(edge_key(a, b))
@@ -254,15 +270,17 @@ def convert_pdf(
 
             flush_pending()
             if name == "q":
-                graphics_stack.append((ctm, line_width))
+                graphics_stack.append((ctm, line_width, line_cap))
             elif name == "Q":
                 if not graphics_stack:
                     raise RuntimeError("Invalid PDF content stream: unmatched `Q` operator.")
-                ctm, line_width = graphics_stack.pop()
+                ctm, line_width, line_cap = graphics_stack.pop()
             elif name == "cm":
                 ctm = multiply_matrices(tuple(float(value) for value in operands), ctm)
             elif name == "w":
                 line_width = float(operands[0])
+            elif name == "J":
+                line_cap = int(operands[0])
 
             # Keep graphics-state operators other than `gs`, matching the original
             # conversion behavior for PDFs that use large Darken blend groups.
@@ -274,12 +292,17 @@ def convert_pdf(
             '<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">'
         ]
         polyline_count = 0
-        for width, edges in sorted(segments.items()):
+        for width in sorted(segments.keys() | dots.keys()):
+            edges = segments[width]
             paths = [
                 remove_collinear_points(path) for path in chain_segments(edges)
             ]
             polyline_count += len(paths)
             data = "".join(make_path_data(path) for path in paths)
+            data += "".join(
+                f"M{format_number(x)} {format_number(y)}l0 0"
+                for x, y in sorted(dots[width])
+            )
             merged_group.append(f'<path stroke-width="{width}" d="{data}"/>')
         merged_group.append("</g>")
 
