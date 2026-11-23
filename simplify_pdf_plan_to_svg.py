@@ -17,6 +17,7 @@ import tempfile
 
 Matrix = tuple[float, float, float, float, float, float]
 Point = tuple[float, float]
+MAX_SVG_BYTES = 2_000_000
 
 
 def multiply_matrices(a: Matrix, b: Matrix) -> Matrix:
@@ -161,6 +162,41 @@ def load_pikepdf():
         return importlib.import_module("pikepdf")
     except ImportError as exc:
         raise RuntimeError(f"Could not load pikepdf after installation: {exc}") from exc
+
+
+def prepare_svg(svg: str) -> bytes:
+    """Make the SVG responsive and reject results larger than 2 MB."""
+    root = re.search(r"<svg\b[^>]*>", svg)
+    if root is None:
+        raise RuntimeError("`pdftocairo` produced an SVG without an <svg> root.")
+    tag = root.group()
+    if not re.search(r"\bviewBox\s*=", tag):
+        raise RuntimeError("`pdftocairo` produced an SVG without a viewBox.")
+    for attribute in ("width", "height"):
+        tag, count = re.subn(
+            rf'\s{attribute}\s*=\s*(["\']).*?\1',
+            f' {attribute}="100%"',
+            tag,
+            count=1,
+        )
+        if count != 1:
+            raise RuntimeError(f"`pdftocairo` produced an SVG without {attribute}.")
+    if re.search(r"\spreserveAspectRatio\s*=", tag):
+        tag = re.sub(
+            r'\spreserveAspectRatio\s*=\s*(["\']).*?\1',
+            ' preserveAspectRatio="xMidYMid meet"',
+            tag,
+            count=1,
+        )
+    else:
+        tag = tag[:-1] + ' preserveAspectRatio="xMidYMid meet">'
+    data = (svg[:root.start()] + tag + svg[root.end():]).encode("utf-8")
+    if len(data) > MAX_SVG_BYTES:
+        raise RuntimeError(
+            f"SVG is {len(data):,} bytes, exceeding the 2,000,000-byte limit. "
+            "No output was written; reducing detail may be required."
+        )
+    return data
 
 
 def convert_pdf(
@@ -342,7 +378,7 @@ def convert_pdf(
         + "\n"
         + svg[closing_tag.start() :]
     )
-    output.write_text(svg, encoding="utf-8")
+    output.write_bytes(prepare_svg(svg))
     return path_count, short_count, polyline_count
 
 

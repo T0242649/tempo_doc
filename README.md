@@ -72,6 +72,16 @@ Options:
 - `-t, --threshold`: remove simple stroked paths whose total length is at or below this value in PDF points, even if they connect to other paths. The default is `0`, which keeps short paths and round-cap dots and removes duplicate segments.
 - `-h, --help`: show command-line help.
 
+The SVG uses the PDF page's orientation and aspect ratio and scales to the available browser viewport or container. For an embedded SVG, the page must give its container a defined size; it cannot detect the physical screen size.
+
+For example, to fit the image within the browser window:
+
+```html
+<img src="plan_merged.svg" alt="Plan" style="width: 100vw; height: 100vh; object-fit: contain">
+```
+
+The output limit is **2,000,000 bytes** (2 MB). The script checks the UTF-8 SVG size before writing it. If the result exceeds the limit, it reports an error without writing or overwriting the output. It does not remove additional detail to meet the limit.
+
 ## What it simplifies and known limitations
 
 - It extracts and merges only simple paths made of `moveto`/`lineto` operators and painted with the PDF `S` operator.

@@ -15,6 +15,29 @@ import simplify_pdf_plan_to_svg
 SCRIPT = Path(__file__).resolve().parents[1] / "simplify_pdf_plan_to_svg.py"
 
 
+class OutputTests(unittest.TestCase):
+    def test_exact_byte_limit_and_responsive_dimensions(self):
+        template = '<svg width="100pt" height="200pt" viewBox="0 0 100 200">{}</svg>'
+        result = simplify_pdf_plan_to_svg.prepare_svg(template.format(""))
+        root = ET.fromstring(result)
+        self.assertEqual(root.attrib["width"], "100%")
+        self.assertEqual(root.attrib["height"], "100%")
+        self.assertEqual(root.attrib["viewBox"], "0 0 100 200")
+        self.assertEqual(root.attrib["preserveAspectRatio"], "xMidYMid meet")
+        padding = simplify_pdf_plan_to_svg.MAX_SVG_BYTES - len(result)
+        exact = simplify_pdf_plan_to_svg.prepare_svg(template.format("a" * padding))
+        self.assertEqual(len(exact), 2_000_000)
+        with self.assertRaisesRegex(RuntimeError, "exceeding the 2,000,000-byte limit"):
+            simplify_pdf_plan_to_svg.prepare_svg(template.format("a" * (padding + 1)))
+
+    def test_size_counts_utf8_bytes(self):
+        template = '<svg width="1" height="1" viewBox="0 0 1 1">{}</svg>'
+        result = simplify_pdf_plan_to_svg.prepare_svg(template.format(""))
+        padding = simplify_pdf_plan_to_svg.MAX_SVG_BYTES - len(result)
+        with self.assertRaisesRegex(RuntimeError, "exceeding"):
+            simplify_pdf_plan_to_svg.prepare_svg(template.format("é" * (padding // 2 + 1)))
+
+
 class DependencyTests(unittest.TestCase):
     def test_installs_pikepdf_if_missing(self):
         missing = ModuleNotFoundError("No module named 'pikepdf'", name="pikepdf")
@@ -66,8 +89,28 @@ class ConversionTests(unittest.TestCase):
                     svg = source.with_name(f"drawing-{rotation}_merged.svg").read_text(
                         encoding="utf-8"
                     )
+                    root = ET.fromstring(svg)
+                    expected_viewbox = (
+                        "0 0 200 100" if rotation in (90, 270) else "0 0 100 200"
+                    )
+                    self.assertEqual(root.attrib["viewBox"], expected_viewbox)
+                    self.assertEqual(root.attrib["width"], "100%")
+                    self.assertEqual(root.attrib["height"], "100%")
                     for expected in expected_paths:
                         self.assertIn(expected, svg)
+
+    def test_over_limit_preserves_existing_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "drawing.pdf"
+            output = source.with_name("drawing_merged.svg")
+            output.write_text("existing output", encoding="utf-8")
+            pdf = pikepdf.Pdf.new()
+            pdf.add_blank_page(page_size=(100, 100))
+            pdf.save(source)
+            with mock.patch.object(simplify_pdf_plan_to_svg, "MAX_SVG_BYTES", 1):
+                with self.assertRaisesRegex(RuntimeError, "exceeding"):
+                    simplify_pdf_plan_to_svg.convert_pdf(source, output, 0, 1)
+            self.assertEqual(output.read_text(encoding="utf-8"), "existing output")
 
     def test_threshold_removes_short_paths_when_requested(self):
         with tempfile.TemporaryDirectory() as directory:
