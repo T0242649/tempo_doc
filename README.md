@@ -80,7 +80,7 @@ For example, to fit the image within the browser window:
 <img src="plan_merged.svg" alt="Plan" style="width: 100vw; height: 100vh; object-fit: contain">
 ```
 
-The output limit is **2,000,000 bytes** (2 MB). The script checks the UTF-8 SVG size before writing it. If the result exceeds the limit, it reports an error without writing or overwriting the output. It does not remove additional detail to meet the limit.
+The script writes the SVG even if it exceeds **2,000,000 bytes** (2 MB), and displays a warning with the actual size. It does not remove additional detail to meet this size.
 
 ## What it simplifies and known limitations
 

@@ -1,4 +1,6 @@
 from pathlib import Path
+import contextlib
+import io
 import shutil
 import subprocess
 import sys
@@ -16,7 +18,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "simplify_pdf_plan_to_svg.py"
 
 
 class OutputTests(unittest.TestCase):
-    def test_exact_byte_limit_and_responsive_dimensions(self):
+    def test_responsive_dimensions(self):
         template = '<svg width="100pt" height="200pt" viewBox="0 0 100 200">{}</svg>'
         result = simplify_pdf_plan_to_svg.prepare_svg(template.format(""))
         root = ET.fromstring(result)
@@ -24,19 +26,6 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(root.attrib["height"], "100%")
         self.assertEqual(root.attrib["viewBox"], "0 0 100 200")
         self.assertEqual(root.attrib["preserveAspectRatio"], "xMidYMid meet")
-        padding = simplify_pdf_plan_to_svg.MAX_SVG_BYTES - len(result)
-        exact = simplify_pdf_plan_to_svg.prepare_svg(template.format("a" * padding))
-        self.assertEqual(len(exact), 2_000_000)
-        with self.assertRaisesRegex(RuntimeError, "exceeding the 2,000,000-byte limit"):
-            simplify_pdf_plan_to_svg.prepare_svg(template.format("a" * (padding + 1)))
-
-    def test_size_counts_utf8_bytes(self):
-        template = '<svg width="1" height="1" viewBox="0 0 1 1">{}</svg>'
-        result = simplify_pdf_plan_to_svg.prepare_svg(template.format(""))
-        padding = simplify_pdf_plan_to_svg.MAX_SVG_BYTES - len(result)
-        with self.assertRaisesRegex(RuntimeError, "exceeding"):
-            simplify_pdf_plan_to_svg.prepare_svg(template.format("é" * (padding // 2 + 1)))
-
 
 class DependencyTests(unittest.TestCase):
     def test_installs_pikepdf_if_missing(self):
@@ -99,18 +88,27 @@ class ConversionTests(unittest.TestCase):
                     for expected in expected_paths:
                         self.assertIn(expected, svg)
 
-    def test_over_limit_preserves_existing_output(self):
+    def test_warning_only_when_output_exceeds_limit(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "drawing.pdf"
             output = source.with_name("drawing_merged.svg")
-            output.write_text("existing output", encoding="utf-8")
             pdf = pikepdf.Pdf.new()
             pdf.add_blank_page(page_size=(100, 100))
             pdf.save(source)
-            with mock.patch.object(simplify_pdf_plan_to_svg, "MAX_SVG_BYTES", 1):
-                with self.assertRaisesRegex(RuntimeError, "exceeding"):
-                    simplify_pdf_plan_to_svg.convert_pdf(source, output, 0, 1)
-            self.assertEqual(output.read_text(encoding="utf-8"), "existing output")
+            for limit, warning_expected in ((1, True), (2_000_000, False)):
+                stderr = io.StringIO()
+                with mock.patch.object(simplify_pdf_plan_to_svg, "MAX_SVG_BYTES", limit):
+                    with contextlib.redirect_stderr(stderr):
+                        simplify_pdf_plan_to_svg.convert_pdf(source, output, 0, 1)
+                self.assertEqual("Warning:" in stderr.getvalue(), warning_expected)
+                self.assertEqual(ET.parse(output).getroot().tag, "{http://www.w3.org/2000/svg}svg")
+            actual_size = output.stat().st_size
+            for limit, warning_expected in ((actual_size, False), (actual_size - 1, True)):
+                stderr = io.StringIO()
+                with mock.patch.object(simplify_pdf_plan_to_svg, "MAX_SVG_BYTES", limit):
+                    with contextlib.redirect_stderr(stderr):
+                        simplify_pdf_plan_to_svg.convert_pdf(source, output, 0, 1)
+                self.assertEqual("Warning:" in stderr.getvalue(), warning_expected)
 
     def test_threshold_removes_short_paths_when_requested(self):
         with tempfile.TemporaryDirectory() as directory:

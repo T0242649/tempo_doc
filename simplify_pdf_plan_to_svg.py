@@ -165,7 +165,7 @@ def load_pikepdf():
 
 
 def prepare_svg(svg: str) -> bytes:
-    """Make the SVG responsive and reject results larger than 2 MB."""
+    """Make the SVG responsive and encode it as UTF-8."""
     root = re.search(r"<svg\b[^>]*>", svg)
     if root is None:
         raise RuntimeError("`pdftocairo` produced an SVG without an <svg> root.")
@@ -190,13 +190,7 @@ def prepare_svg(svg: str) -> bytes:
         )
     else:
         tag = tag[:-1] + ' preserveAspectRatio="xMidYMid meet">'
-    data = (svg[:root.start()] + tag + svg[root.end():]).encode("utf-8")
-    if len(data) > MAX_SVG_BYTES:
-        raise RuntimeError(
-            f"SVG is {len(data):,} bytes, exceeding the 2,000,000-byte limit. "
-            "No output was written; reducing detail may be required."
-        )
-    return data
+    return (svg[:root.start()] + tag + svg[root.end():]).encode("utf-8")
 
 
 def convert_pdf(
@@ -378,7 +372,13 @@ def convert_pdf(
         + "\n"
         + svg[closing_tag.start() :]
     )
-    output.write_bytes(prepare_svg(svg))
+    data = prepare_svg(svg)
+    output.write_bytes(data)
+    if len(data) > MAX_SVG_BYTES:
+        print(
+            f"Warning: SVG is {len(data):,} bytes, exceeding 2,000,000 bytes (2 MB).",
+            file=sys.stderr,
+        )
     return path_count, short_count, polyline_count
 
 
