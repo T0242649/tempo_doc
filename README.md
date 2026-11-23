@@ -10,6 +10,17 @@
 
 ### Installation
 
+Windows (PowerShell):
+
+1. Install Python 3.10 or later and Poppler for Windows.
+2. Add Poppler's `bin` directory to `PATH`, open a new PowerShell window, and verify that `pdftocairo -v` works.
+3. In the project directory, create a virtual environment and install the Python dependency:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
 Linux (Debian/Ubuntu):
 
 ```bash
@@ -29,17 +40,27 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-On Windows, install Python and Poppler, then add Poppler's `bin` directory to `PATH`. The command `pdftocairo -v` should work in a new terminal.
-
 ## Usage
 
-Run from the project directory:
+On Windows, run from the project directory:
+
+```powershell
+.\.venv\Scripts\python.exe simplify_pdf_plan_to_svg.py plan.pdf
+```
+
+On Linux or macOS, with the virtual environment activated:
 
 ```bash
 python3 simplify_pdf_plan_to_svg.py plan.pdf
 ```
 
-By default, the script reads the first page and creates `plan_merged.svg` beside the PDF. To choose the output path, page, or short-stroke threshold:
+By default, the script reads the first page and creates `plan_merged.svg` beside the PDF. To choose the output path, page, or short-stroke threshold on Windows:
+
+```powershell
+.\.venv\Scripts\python.exe simplify_pdf_plan_to_svg.py plan.pdf -o result.svg -p 2 -t 0.5
+```
+
+On Linux or macOS:
 
 ```bash
 python3 simplify_pdf_plan_to_svg.py plan.pdf -o result.svg -p 2 -t 0.5
