@@ -14,12 +14,14 @@ Windows (PowerShell):
 
 1. Install Python 3.10 or later and Poppler for Windows.
 2. Add Poppler's `bin` directory to `PATH`, open a new PowerShell window, and verify that `pdftocairo -v` works.
-3. In the project directory, create a virtual environment and install the Python dependency:
+3. In PowerShell, navigate to the project directory. Copy only the commands below, not the Markdown code fences (` ```powershell ` and ` ``` `). Create a virtual environment and install the Python dependency:
 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
+
+The second command requires the first one to complete successfully. If PowerShell says `.\.venv\Scripts\python.exe` is not recognized, check that you are in the same project directory and run the first command again. If `py` is not recognized, install Python and enable the Python launcher.
 
 Linux (Debian/Ubuntu):
 
@@ -45,8 +47,10 @@ python3 -m pip install -r requirements.txt
 On Windows, run from the project directory:
 
 ```powershell
-.\.venv\Scripts\python.exe simplify_pdf_plan_to_svg.py plan.pdf
+.\.venv\Scripts\python.exe .\simplify_pdf_plan_to_svg.py "Plan IHM_L15S T2_Gare_09BVC_S01-S1A (1)-Objet.pdf"
 ```
+
+Keep the quotes around paths containing spaces or parentheses.
 
 On Linux or macOS, with the virtual environment activated:
 

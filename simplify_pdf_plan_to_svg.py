@@ -272,7 +272,10 @@ def convert_pdf(
             rest_svg = temp_path / "rest.svg"
             pdf.save(rest_pdf)
             subprocess.run(
-                [renderer, "-svg", str(rest_pdf), str(rest_svg)],
+                [
+                    renderer, "-svg", "-f", str(page_number), "-l", str(page_number),
+                    str(rest_pdf), str(rest_svg),
+                ],
                 check=True,
                 capture_output=True,
                 text=True,
