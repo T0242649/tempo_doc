@@ -1,6 +1,6 @@
 # PDF Plan to SVG Simplifier
 
-`simplify_pdf_plan_to_svg.py` converts vector PDF drawings into SVG. It merges repeated and collinear straight segments to reduce SVG size, then uses `pdftocairo` to keep text and other elements that are not simplified.
+`simplify_pdf_plan_to_svg.py` converts vector PDF drawings into lightweight SVG. It merges repeated and nearly collinear straight segments and removes short stroked paths to reduce SVG size, then uses `pdftocairo` for the remaining elements.
 
 ## Requirements
 
@@ -69,7 +69,7 @@ Options:
 
 - `-o, --output`: path for the output SVG.
 - `-p, --page`: PDF page number, starting at `1`.
-- `-t, --threshold`: remove simple stroked paths whose total length is at or below this value in PDF points, even if they connect to other paths. The default is `0`, which keeps short paths and round-cap dots and removes duplicate segments.
+- `-t, --threshold`: remove simple stroked paths whose total length is at or below this value in PDF points, even if they connect to other paths. The default is `0.96`; use `0` to keep short paths and round-cap dots.
 - `-h, --help`: show command-line help.
 
 The SVG uses the PDF page's orientation and aspect ratio and scales to the available browser viewport or container. For an embedded SVG, the page must give its container a defined size; it cannot detect the physical screen size.
@@ -80,11 +80,12 @@ For example, to fit the image within the browser window:
 <img src="plan_merged.svg" alt="Plan" style="width: 100vw; height: 100vh; object-fit: contain">
 ```
 
-The script writes the SVG even if it exceeds **2,000,000 bytes** (2 MB), and displays a warning with the actual size. It does not remove additional detail to meet this size.
+The default simplification targets smaller output but does not guarantee a size below 2 MB. The script writes the SVG even if it exceeds **2,000,000 bytes** (2 MB), and displays a warning with the actual size. Raising `-t` can remove more detail and may reduce the size further.
 
 ## What it simplifies and known limitations
 
 - It extracts and merges only simple paths made of `moveto`/`lineto` operators and painted with the PDF `S` operator.
+- Coordinates are rounded to 0.1 PDF point and nearly collinear points may be removed; small details can be lost.
 - Extracted paths are rendered in black; this stage does not preserve their original colors or dashed-line styles, and does not simplify curves or filled paths.
 - Clipping paths are not applied to extracted segments. Some graphics-state operators (`gs`) are not preserved in the intermediate PDF.
 - Straight strokes on pages rotated by 90, 180, or 270 degrees are mapped to the rotated output.

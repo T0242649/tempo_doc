@@ -33,8 +33,8 @@ def multiply_matrices(a: Matrix, b: Matrix) -> Matrix:
 
 
 def format_number(value: float) -> str:
-    """Format a number to three decimal places without trailing zeros or -0."""
-    result = ("%.3f" % value).rstrip("0").rstrip(".")
+    """Format a number to one decimal place without trailing zeros or -0."""
+    result = ("%.1f" % value).rstrip("0").rstrip(".")
     return "0" if result in ("-0", "") else result
 
 
@@ -97,7 +97,7 @@ def remove_collinear_points(points: list[Point]) -> list[Point]:
         a, b, c = result[-1], points[index], points[index + 1]
         cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0])
         dot = (b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])
-        if abs(cross) > 1e-9 or dot <= 0:
+        if abs(cross) >= 0.05 or dot <= 0:
             result.append(b)
     result.append(points[-1])
     return result
@@ -129,10 +129,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
         "-t",
         "--threshold",
         type=float,
-        default=0,
+        default=0.96,
         help=(
             "remove simple stroked paths with total length <= this value in PDF points "
-            "(default: 0; short paths are kept)"
+            "(default: 0.96; 0 keeps short paths)"
         ),
     )
     parser.add_argument("-p", "--page", type=int, default=1, help="page number (default: 1)")
@@ -254,7 +254,7 @@ def convert_pdf(
                 px, py = page_height - py, page_width - px
             else:
                 py = page_height - py
-            return round(px, 3), round(py, 3)
+            return round(px, 1), round(py, 1)
 
         def flush_pending() -> None:
             remaining.extend(pending)

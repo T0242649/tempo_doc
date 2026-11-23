@@ -72,7 +72,7 @@ class ConversionTests(unittest.TestCase):
                     )
                     pdf.save(source)
                     subprocess.run(
-                        [sys.executable, str(SCRIPT), str(source)],
+                        [sys.executable, str(SCRIPT), str(source), "-t", "0"],
                         capture_output=True, text=True, check=True,
                     )
                     svg = source.with_name(f"drawing-{rotation}_merged.svg").read_text(
@@ -124,7 +124,22 @@ class ConversionTests(unittest.TestCase):
             svg = source.with_name("drawing_merged.svg").read_text(encoding="utf-8")
             self.assertNotIn("M10 90l0.2 0", svg)
 
-    def test_round_cap_dots_are_preserved_by_default(self):
+    def test_default_simplification_removes_short_strokes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "drawing.pdf"
+            pdf = pikepdf.Pdf.new()
+            page = pdf.add_blank_page(page_size=(100, 100))
+            page.Contents = pdf.make_stream(b"10 10 m 10.2 10 l S 10 20 m 20 20 l S")
+            pdf.save(source)
+            subprocess.run(
+                [sys.executable, str(SCRIPT), str(source)],
+                capture_output=True, text=True, check=True,
+            )
+            svg = source.with_name("drawing_merged.svg").read_text(encoding="utf-8")
+            self.assertNotIn("M10 90", svg)
+            self.assertIn("M10 80l10 0", svg)
+
+    def test_round_cap_dots_are_preserved_with_zero_threshold(self):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "drawing.pdf"
             pdf = pikepdf.Pdf.new()
@@ -134,7 +149,7 @@ class ConversionTests(unittest.TestCase):
             )
             pdf.save(source)
             subprocess.run(
-                [sys.executable, str(SCRIPT), str(source)],
+                [sys.executable, str(SCRIPT), str(source), "-t", "0"],
                 capture_output=True, text=True, check=True,
             )
             svg = source.with_name("drawing_merged.svg").read_text(encoding="utf-8")
