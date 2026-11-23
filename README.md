@@ -8,16 +8,21 @@
 - Poppler, which provides the `pdftocairo` command
 - `pip` and network access to install `pikepdf` automatically if it is missing
 
-### Installation
+## Windows: setup and run
 
-Windows (PowerShell):
+1. Install Python 3.10 or later with the Python launcher (`py`).
+2. Extract Poppler for Windows next to `simplify_pdf_plan_to_svg.py`. The extracted folder must contain `pdftocairo.exe` under `Release-*/poppler-*/Library/bin` or `Release-*/Library/bin`.
+3. Open PowerShell in the folder containing the script and run:
 
-1. Install Python 3.10 or later and Poppler for Windows.
-2. Extract the Poppler release folder next to `simplify_pdf_plan_to_svg.py`. The script can find `pdftocairo.exe` in `Release-*/poppler-*/Library/bin` or `Release-*/Library/bin`. Alternatively, add Poppler's `Library/bin` directory to `PATH`.
-3. In PowerShell, navigate to the project directory and run the command in the Usage section. If `py` is not recognized, install Python and enable the Python launcher.
+```powershell
+py -3 .\simplify_pdf_plan_to_svg.py "Plan IHM_L15S T2_Gare_09BVC_S01-S1A (1)-Objet.pdf"
+```
 
-The script installs `pikepdf` using the active Python interpreter's `pip` if it is not already installed. This changes that Python environment and requires package-index access and permission to install packages. Poppler is not installed automatically.
-If Poppler is already on `PATH`, that installation is used first. If multiple extracted copies are found next to the script, keep only one or use `PATH` to choose.
+Replace the example PDF name with your own. Keep the quotes around paths containing spaces or parentheses. By default, the SVG is saved beside the PDF as `<PDF name>_merged.svg`.
+
+No separate virtual environment or `pip` command is required: the script installs `pikepdf` in the active Python environment if missing. This requires `pip`, package-index access, and permission to install packages. Poppler is not installed automatically. If Poppler is on `PATH`, that installation is used first; if multiple extracted copies are found next to the script, keep only one or use `PATH` to choose.
+
+## Linux and macOS: installation
 
 Linux (Debian/Ubuntu):
 
@@ -38,15 +43,7 @@ source .venv/bin/activate
 python3 -m pip install -r requirements.txt
 ```
 
-## Usage
-
-On Windows, run from the project directory:
-
-```powershell
-py -3 .\simplify_pdf_plan_to_svg.py "Plan IHM_L15S T2_Gare_09BVC_S01-S1A (1)-Objet.pdf"
-```
-
-Keep the quotes around paths containing spaces or parentheses.
+## Additional usage
 
 On Linux or macOS, with the virtual environment activated:
 
@@ -54,7 +51,7 @@ On Linux or macOS, with the virtual environment activated:
 python3 simplify_pdf_plan_to_svg.py plan.pdf
 ```
 
-By default, the script reads the first page and creates `plan_merged.svg` beside the PDF. To choose the output path, page, or short-stroke threshold on Windows:
+By default, the script reads the first page. To choose the output path, page, or short-stroke threshold on Windows:
 
 ```powershell
 py -3 .\simplify_pdf_plan_to_svg.py plan.pdf -o result.svg -p 2 -t 0.5
