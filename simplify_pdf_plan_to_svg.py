@@ -164,6 +164,39 @@ def load_pikepdf():
         raise RuntimeError(f"Could not load pikepdf after installation: {exc}") from exc
 
 
+def find_pdftocairo() -> str:
+    renderer = shutil.which("pdftocairo")
+    if renderer:
+        return renderer
+
+    if sys.platform == "win32":
+        script_dir = Path(__file__).resolve().parent
+        patterns = (
+            "Release-*/poppler-*/Library/bin/pdftocairo.exe",
+            "Release-*/Library/bin/pdftocairo.exe",
+            "poppler-*/Library/bin/pdftocairo.exe",
+            "poppler/Library/bin/pdftocairo.exe",
+        )
+        matches = sorted({
+            path.resolve()
+            for pattern in patterns
+            for path in script_dir.glob(pattern)
+            if path.is_file()
+        })
+        if len(matches) == 1:
+            return str(matches[0])
+        if len(matches) > 1:
+            raise RuntimeError(
+                "Multiple Poppler installations found next to the script. "
+                "Keep one there or add the desired Poppler bin directory to PATH."
+            )
+
+    raise RuntimeError(
+        "`pdftocairo` was not found. On Windows, extract Poppler next to the "
+        "script or add its Library/bin directory to PATH (see README.md)."
+    )
+
+
 def prepare_svg(svg: str) -> bytes:
     """Make the SVG responsive and encode it as UTF-8."""
     root = re.search(r"<svg\b[^>]*>", svg)
@@ -207,11 +240,7 @@ def convert_pdf(
         raise RuntimeError(f"Output directory does not exist: {output.parent}")
 
     pikepdf = load_pikepdf()
-    renderer = shutil.which("pdftocairo")
-    if renderer is None:
-        raise RuntimeError(
-            "`pdftocairo` was not found. Install Poppler (see README.md)."
-        )
+    renderer = find_pdftocairo()
 
     segments: dict[float, set[tuple[Point, Point]]] = collections.defaultdict(set)
     dots: dict[float, set[Point]] = collections.defaultdict(set)

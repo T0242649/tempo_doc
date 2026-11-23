@@ -13,10 +13,11 @@
 Windows (PowerShell):
 
 1. Install Python 3.10 or later and Poppler for Windows.
-2. Add Poppler's `bin` directory to `PATH`, open a new PowerShell window, and verify that `pdftocairo -v` works.
+2. Extract the Poppler release folder next to `simplify_pdf_plan_to_svg.py`. The script can find `pdftocairo.exe` in `Release-*/poppler-*/Library/bin` or `Release-*/Library/bin`. Alternatively, add Poppler's `Library/bin` directory to `PATH`.
 3. In PowerShell, navigate to the project directory and run the command in the Usage section. If `py` is not recognized, install Python and enable the Python launcher.
 
 The script installs `pikepdf` using the active Python interpreter's `pip` if it is not already installed. This changes that Python environment and requires package-index access and permission to install packages. Poppler is not installed automatically.
+If Poppler is already on `PATH`, that installation is used first. If multiple extracted copies are found next to the script, keep only one or use `PATH` to choose.
 
 Linux (Debian/Ubuntu):
 

@@ -51,6 +51,44 @@ class DependencyTests(unittest.TestCase):
                 simplify_pdf_plan_to_svg.load_pikepdf()
 
 
+class PopplerDiscoveryTests(unittest.TestCase):
+    def test_discovers_extracted_release_next_to_script(self):
+        with tempfile.TemporaryDirectory(prefix="project space ") as directory:
+            root = Path(directory)
+            exe = root / "Release-26.09.0-0" / "poppler-26.09.0" / "Library" / "bin" / "pdftocairo.exe"
+            exe.parent.mkdir(parents=True)
+            exe.touch()
+            with mock.patch.object(simplify_pdf_plan_to_svg, "__file__", str(root / "script.py")), \
+                 mock.patch.object(simplify_pdf_plan_to_svg.sys, "platform", "win32"), \
+                 mock.patch.object(simplify_pdf_plan_to_svg.shutil, "which", return_value=None):
+                self.assertEqual(simplify_pdf_plan_to_svg.find_pdftocairo(), str(exe.resolve()))
+
+    def test_path_installation_takes_precedence(self):
+        with mock.patch.object(simplify_pdf_plan_to_svg.shutil, "which", return_value="renderer"):
+            self.assertEqual(simplify_pdf_plan_to_svg.find_pdftocairo(), "renderer")
+
+    def test_multiple_local_installations_are_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for version in ("1", "2"):
+                exe = root / f"Release-{version}" / "Library" / "bin" / "pdftocairo.exe"
+                exe.parent.mkdir(parents=True)
+                exe.touch()
+            with mock.patch.object(simplify_pdf_plan_to_svg, "__file__", str(root / "script.py")), \
+                 mock.patch.object(simplify_pdf_plan_to_svg.sys, "platform", "win32"), \
+                 mock.patch.object(simplify_pdf_plan_to_svg.shutil, "which", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "Multiple Poppler installations"):
+                    simplify_pdf_plan_to_svg.find_pdftocairo()
+
+    def test_missing_installation_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(simplify_pdf_plan_to_svg, "__file__", str(Path(directory) / "script.py")), \
+                 mock.patch.object(simplify_pdf_plan_to_svg.sys, "platform", "win32"), \
+                 mock.patch.object(simplify_pdf_plan_to_svg.shutil, "which", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "pdftocairo.*not found"):
+                    simplify_pdf_plan_to_svg.find_pdftocairo()
+
+
 @unittest.skipUnless(shutil.which("pdftocairo"), "pdftocairo is required")
 class ConversionTests(unittest.TestCase):
     def test_rotated_pages_and_short_strokes(self):
