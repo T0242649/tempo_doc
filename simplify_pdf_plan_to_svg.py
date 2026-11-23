@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import importlib
 import math
 from pathlib import Path
 import re
@@ -137,30 +138,50 @@ def build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def load_pikepdf():
+    try:
+        return importlib.import_module("pikepdf")
+    except ModuleNotFoundError as exc:
+        if exc.name != "pikepdf":
+            raise RuntimeError(f"Cannot load pikepdf: {exc}") from exc
+
+    print("Installing missing dependency pikepdf using pip...", flush=True)
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "pikepdf>=9.0"],
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Could not install pikepdf. Check the pip output and your network or permissions."
+        ) from exc
+
+    importlib.invalidate_caches()
+    try:
+        return importlib.import_module("pikepdf")
+    except ImportError as exc:
+        raise RuntimeError(f"Could not load pikepdf after installation: {exc}") from exc
+
+
 def convert_pdf(
     source: Path,
     output: Path,
     threshold: float,
     page_number: int,
 ) -> tuple[int, int, int]:
-    try:
-        import pikepdf
-    except ImportError as exc:
-        raise RuntimeError(
-            "Missing Python dependency: install it with `python3 -m pip install -r requirements.txt`."
-        ) from exc
-
-    renderer = shutil.which("pdftocairo")
-    if renderer is None:
-        raise RuntimeError(
-            "`pdftocairo` was not found. Install Poppler (see README.md)."
-        )
     if not source.is_file():
         raise RuntimeError(f"Input PDF does not exist or is not a file: {source}")
     if source.resolve() == output.resolve():
         raise RuntimeError("The output path must not overwrite the input PDF.")
     if not output.parent.is_dir():
         raise RuntimeError(f"Output directory does not exist: {output.parent}")
+
+    pikepdf = load_pikepdf()
+    renderer = shutil.which("pdftocairo")
+    if renderer is None:
+        raise RuntimeError(
+            "`pdftocairo` was not found. Install Poppler (see README.md)."
+        )
 
     segments: dict[float, set[tuple[Point, Point]]] = collections.defaultdict(set)
     short_count = path_count = 0

@@ -4,12 +4,39 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 import xml.etree.ElementTree as ET
 
 import pikepdf
 
+import simplify_pdf_plan_to_svg
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "simplify_pdf_plan_to_svg.py"
+
+
+class DependencyTests(unittest.TestCase):
+    def test_installs_pikepdf_if_missing(self):
+        missing = ModuleNotFoundError("No module named 'pikepdf'", name="pikepdf")
+        with mock.patch.object(
+            simplify_pdf_plan_to_svg.importlib, "import_module", side_effect=[missing, pikepdf]
+        ), mock.patch.object(simplify_pdf_plan_to_svg.subprocess, "run") as run:
+            self.assertIs(simplify_pdf_plan_to_svg.load_pikepdf(), pikepdf)
+            run.assert_called_once_with(
+                [sys.executable, "-m", "pip", "install", "pikepdf>=9.0"], check=True
+            )
+
+    def test_failed_installation_is_reported(self):
+        missing = ModuleNotFoundError("No module named 'pikepdf'", name="pikepdf")
+        with mock.patch.object(
+            simplify_pdf_plan_to_svg.importlib, "import_module", side_effect=missing
+        ), mock.patch.object(
+            simplify_pdf_plan_to_svg.subprocess,
+            "run",
+            side_effect=subprocess.CalledProcessError(1, "pip"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Could not install pikepdf"):
+                simplify_pdf_plan_to_svg.load_pikepdf()
 
 
 @unittest.skipUnless(shutil.which("pdftocairo"), "pdftocairo is required")
