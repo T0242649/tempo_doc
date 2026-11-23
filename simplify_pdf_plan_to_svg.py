@@ -237,6 +237,7 @@ def convert_pdf(
 
         instructions = pikepdf.parse_content_stream(page)
         ctm: Matrix = (1, 0, 0, 1, 0, 0)
+        point_caches: dict[Matrix, dict[Point, Point]] = {}
         graphics_stack: list[tuple[Matrix, float, int]] = []
         line_width = 1.0
         line_cap = 0
@@ -244,6 +245,14 @@ def convert_pdf(
         remaining = []
 
         def to_page(x: float, y: float) -> Point:
+            cache = point_caches.get(ctm)
+            if cache is None:
+                cache = point_caches[ctm] = {}
+            source_point = (x, y)
+            cached = cache.get(source_point)
+            if cached is not None:
+                return cached
+
             px = ctm[0] * x + ctm[2] * y + ctm[4] - x0
             py = ctm[1] * x + ctm[3] * y + ctm[5] - y0
             if rotation == 90:
@@ -254,7 +263,9 @@ def convert_pdf(
                 px, py = page_height - py, page_width - px
             else:
                 py = page_height - py
-            return round(px, 1), round(py, 1)
+            result = round(px, 1), round(py, 1)
+            cache[source_point] = result
+            return result
 
         def flush_pending() -> None:
             remaining.extend(pending)
@@ -282,10 +293,10 @@ def convert_pdf(
                     math.dist(points[index], points[index + 1])
                     for index in range(len(points) - 1)
                 )
-                scale = math.sqrt(abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]))
-                width = round(max(line_width * scale, 0.1), 2)
                 if length == 0:
                     if threshold == 0 and line_cap == 1 and len(points) > 1:
+                        scale = math.sqrt(abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]))
+                        width = round(max(line_width * scale, 0.1), 2)
                         dots[width].add(points[0])
                     else:
                         short_count += 1
@@ -293,6 +304,8 @@ def convert_pdf(
                 if threshold > 0 and length <= threshold:
                     short_count += 1
                     continue
+                scale = math.sqrt(abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]))
+                width = round(max(line_width * scale, 0.1), 2)
                 for a, b in zip(points, points[1:]):
                     if a != b:
                         segments[width].add(edge_key(a, b))
@@ -317,6 +330,7 @@ def convert_pdf(
             if name != "gs":
                 remaining.append((operands, operator))
         flush_pending()
+        del instructions
 
         merged_group = [
             '<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">'
@@ -336,7 +350,9 @@ def convert_pdf(
             merged_group.append(f'<path stroke-width="{width}" d="{data}"/>')
         merged_group.append("</g>")
 
-        page.Contents = pdf.make_stream(pikepdf.unparse_content_stream(remaining))
+        remaining_content = pikepdf.unparse_content_stream(remaining)
+        del remaining
+        page.Contents = pdf.make_stream(remaining_content)
         if "/ExtGState" in page.Resources:
             del page.Resources["/ExtGState"]
 
